@@ -96,21 +96,21 @@ function loadCfg(){
   return Object.assign({},DEF_CFG,c,{redes:Object.assign({},DEF_CFG.redes,(c||{}).redes),clausulas:c.clausulas||DEF_CLAUSULAS});}
   catch(e){return Object.assign({},DEF_CFG)}
 }
-function saveCfg(c){try{localStorage.setItem(CFG_KEY,JSON.stringify(c))}catch(e){console.warn("OC Agenda: localStorage no disponible")}applyColor(c.color)}
+function saveCfg(c){localStorage.setItem(CFG_KEY,JSON.stringify(c));applyColor(c.color)}
 
 var DEF_PKG=[{id:"1",nombre:"Cantante Solista",precio:2500},{id:"2",nombre:"Solista + Baterista",precio:3500}];
 function loadPkg(){try{var p=JSON.parse(localStorage.getItem(PKG_KEY));return(p&&p.length)?p:DEF_PKG}catch(e){return DEF_PKG}}
-function savePkg(p){try{localStorage.setItem(PKG_KEY,JSON.stringify(p))}catch(e){}}
+function savePkg(p){localStorage.setItem(PKG_KEY,JSON.stringify(p))}
 
 var DEF_MPKG=[{id:"m1",nombre:"Misa estándar",precio:1500}];
 function loadMPkg(){try{var p=JSON.parse(localStorage.getItem(MPKG_KEY));return(p&&p.length)?p:DEF_MPKG}catch(e){return DEF_MPKG}}
-function saveMPkg(p){try{localStorage.setItem(MPKG_KEY,JSON.stringify(p))}catch(e){}}
+function saveMPkg(p){localStorage.setItem(MPKG_KEY,JSON.stringify(p))}
 
 function loadPrices(){try{var p=JSON.parse(localStorage.getItem(PRICE_KEY));return p||{misas:1500}}catch(e){return{misas:1500}}}
 function savePrices(p){localStorage.setItem(PRICE_KEY,JSON.stringify(p))}
 
 function loadRepertorio(){try{var r=JSON.parse(localStorage.getItem(REPERT_KEY));return Array.isArray(r)?r:[]}catch(e){return[]}}
-function saveRepertorio(r){try{localStorage.setItem(REPERT_KEY,JSON.stringify(r))}catch(e){}}
+function saveRepertorio(r){localStorage.setItem(REPERT_KEY,JSON.stringify(r))}
 function reperByCategory(rep){var m={};rep.forEach(function(r){if(!m[r.cat])m[r.cat]=[];m[r.cat].push(r.song)});return m}
 
 function hexToRgb(hex){
@@ -665,7 +665,7 @@ function PinScreen(props){
   var _err=us(false),err=_err[0],setErr=_err[1];
   var _shake=us(false),shake=_shake[0],setShake=_shake[1];
   function addDigit(d){if(pin.length>=4)return;var next=pin+d;setPin(next);setErr(false);
-    if(next.length===4){if(next===(cfg.pin||"0000")){try{sessionStorage.setItem("oc-unlocked","1")}catch(e){}props.onUnlock()}else{setErr(true);setShake(true);setTimeout(function(){setPin("");setShake(false)},600)}}}
+    if(next.length===4){if(next===(cfg.pin||"0000")){sessionStorage.setItem("oc-unlocked","1");props.onUnlock()}else{setErr(true);setShake(true);setTimeout(function(){setPin("");setShake(false)},600)}}}
   function del(){setPin(pin.slice(0,-1));setErr(false)}
   var ac=cfg.color||"#9333EA";
   return h(React.Fragment,null,
@@ -690,41 +690,15 @@ function PinScreen(props){
   );
 }
 
-// ===== ERROR BOUNDARY =====
-var ErrorBoundary=(function(){
-  function EB(props){React.Component.call(this,props);this.state={err:null}}
-  EB.prototype=Object.create(React.Component.prototype);
-  EB.prototype.constructor=EB;
-  EB.getDerivedStateFromError=function(e){return{err:e}};
-  EB.prototype.render=function(){
-    if(this.state.err){
-      var msg=this.state.err&&this.state.err.message?this.state.err.message:"Error desconocido";
-      return h("div",{style:{position:"fixed",inset:0,background:"#000",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,zIndex:9999}},
-        h("div",{style:{fontSize:40,marginBottom:16}},"⚠️"),
-        h("h2",{style:{color:"#fff",fontFamily:"'Outfit',sans-serif",fontSize:16,marginBottom:8,textAlign:"center"}},"Algo salió mal"),
-        h("p",{style:{color:"#666",fontSize:12,marginBottom:24,textAlign:"center",maxWidth:280}},msg),
-        h("button",{onClick:function(){window.location.reload()},style:{background:"#9333EA",color:"#fff",border:"none",borderRadius:12,padding:"12px 28px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}},"🔄 Recargar app")
-      );
-    }
-    return this.props.children;
-  };
-  return EB;
-})();
-
 // ===== ROOT =====
 function Root(){
   var _cfg=us(loadCfg),cfg=_cfg[0],setCfg=_cfg[1];
   var _unlocked=us(sessionStorage.getItem("oc-unlocked")==="1"),unlocked=_unlocked[0],setUnlocked=_unlocked[1];
   var isNew=!cfg.nombre;
   ue(function(){applyColor(cfg.color)},[cfg.color]);
-  if(isNew)return h(OnboardingScreen,{onDone:function(nc){
-    saveCfg(nc);
-    try{sessionStorage.setItem("oc-unlocked","1")}catch(e){}
-    // Reload page for a clean transition — avoids black screen on mobile
-    window.location.reload();
-  }});
+  if(isNew)return h(OnboardingScreen,{onDone:function(nc){saveCfg(nc);setCfg(nc);sessionStorage.setItem("oc-unlocked","1");setUnlocked(true)}});
   if(!unlocked)return h(PinScreen,{cfg:cfg,onUnlock:function(){setUnlocked(true)}});
-  return h(ErrorBoundary,null,h(App,{cfg0:cfg,setCfg0:setCfg}));
+  return h(App,{cfg0:cfg,setCfg0:setCfg});
 }
 
 // ===== MAIN APP =====
