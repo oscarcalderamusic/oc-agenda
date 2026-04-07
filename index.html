@@ -86,6 +86,7 @@ var DEF_CFG={
   whatsapp:"",telefono_lada:"",website:"",
   redes:{facebook:"",instagram:"",tiktok:""},
   color:"#9333EA",logo:"",firma:"",pin:"0000",cotizar_url:"",
+  tipo2_nombre:"Misas",tipo2_icono:"⛪",tipo2_en_cotizar:true,
   clausulas_activas:true,clausulas:DEF_CLAUSULAS
 };
 
@@ -134,7 +135,7 @@ var PALETAS=[
   {n:"Ámbar",c:"#D97706"},{n:"Índigo",c:"#4338CA"}
 ];
 
-var EMPTY={id:"",fecha:"",fecha_fin:"",hora:"",horas:"1",tipo:"",paquete_id:"",misa_paquete_id:"",contacto:"",telefono:"",direccion:"",personas:"",anticipo:"",notas:"",estado:"Pendiente"};
+var EMPTY={id:"",fecha:"",fecha_fin:"",hora:"",horas:"1",tipo:"",paquete_id:"",misa_paquete_id:"",contacto:"",telefono:"",direccion:"",personas:"",anticipo:"",notas:"",estado:"Pendiente",canciones:["","","",""]};
 var I={background:"rgba(255,255,255,0.055)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"10px 12px",color:"#fff",fontSize:14,outline:"none",fontFamily:"'Outfit',sans-serif",width:"100%",transition:"border-color 0.2s"};
 var LB={fontSize:10,color:"#777",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.6px",marginBottom:5,display:"block"};
 var JM="'JetBrains Mono',monospace";
@@ -153,14 +154,16 @@ function ct(ev,pkgs,prices,mpkgs){
     var pkg=pkgs.find(function(p){return p.id===ev.paquete_id});
     return(Number(ev.horas)||1)*(pkg?pkg.precio:(pkgs[0]?pkgs[0].precio:0));
   }
-  if(ev.tipo==="Misas"){
+  if(isTipo2(ev.tipo,null)){
     if(ev.precioMisas)return ev.precioMisas;
     if(mpkgs){var mp=mpkgs.find(function(p){return p.id===ev.misa_paquete_id});if(mp)return mp.precio}
     return prices.misas||0;
   }
   return 0;
 }
-function mapsUrl(a){return"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(a)}
+function isTipo2(tipo,cfg){var n=cfg&&cfg.tipo2_nombre?cfg.tipo2_nombre:"Misas";return tipo===n||tipo==="Misas"}
+function t2nombre(cfg){return(cfg&&cfg.tipo2_nombre)||"Misas"}
+function t2icono(cfg){return(cfg&&cfg.tipo2_icono)||"⛪"}
 function waNum(t){var n=(t||"").replace(/\D/g,"");if(n.length===10)n="52"+n;if(n.length===7)n="52686"+n;return n}
 function waUrl(t){return"https://wa.me/"+waNum(t)}
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||[]}catch(e){return[]}}
@@ -249,7 +252,7 @@ function genRecibo(ev,evs,cfg,pkgs,prices,mpkgs){
 
   var pName="";
   if(ev.tipo==="Por hora"){var _pkg=pkgs.find(function(p){return p.id===ev.paquete_id});if(_pkg)pName=_pkg.nombre}
-  if(ev.tipo==="Misas"){var _mp=mpkgs.find(function(p){return p.id===ev.misa_paquete_id});if(_mp)pName=_mp.nombre}
+  if(isTipo2(ev.tipo,cfg)){var _mp=mpkgs.find(function(p){return p.id===ev.misa_paquete_id});if(_mp)pName=_mp.nombre}
 
   var rows=[
     ["Fecha del evento",fd(ev.fecha)],
@@ -566,13 +569,13 @@ function genReporte(events,fYear,fMonth,cfg,pkgs,prices,mpkgs){
 function reqNotif(){if("Notification"in window&&Notification.permission==="default")Notification.requestPermission()}
 function chkReminders(evs){if(!("Notification"in window)||Notification.permission!=="granted")return;var now=Date.now();evs.forEach(function(ev){if(ev.estado==="Cancelado"||!ev.fecha||!ev.hora)return;var dt=new Date(ev.fecha+"T"+ev.hora+":00").getTime(),d=dt-now;if(d>0&&d<=7200000&&d>7140000)new Notification("🎤 Evento en 2 horas",{body:ev.tipo+" - "+ev.contacto,icon:"./icons/icon-192.svg"});if(d>0&&d<=86400000&&d>86340000)new Notification("🎤 Evento mañana",{body:ev.tipo+" - "+ev.contacto+" "+ft(ev.hora),icon:"./icons/icon-192.svg"})})}
 
-function shareWA(ev,cfg,pkgs,prices,mpkgs){var total=ct(ev,pkgs,prices,mpkgs),saldo=total-(ev.anticipo||0);var pName="";if(ev.tipo==="Por hora"){var pkg=pkgs.find(function(p){return p.id===ev.paquete_id});if(pkg)pName=" ("+pkg.nombre+")"}if(ev.tipo==="Misas"){var mp=mpkgs.find(function(p){return p.id===ev.misa_paquete_id});if(mp)pName=" ("+mp.nombre+")"}var m="🎤 *"+cfg.nombre+" — Resumen de Evento*\n\n📋 *Tipo:* "+ev.tipo+pName+"\n📅 *Fecha:* "+fd(ev.fecha)+"\n";if(ev.hora)m+="🕐 *Inicio:* "+ft(ev.hora)+"\n🕐 *Fin:* "+calcEnd(ev.hora,ev.tipo==="Por hora"?ev.horas:1)+"\n";m+="💰 *Total:* "+fm(total)+"\n";if(ev.anticipo)m+="💵 *Anticipo:* "+fm(ev.anticipo)+"\n📊 *Restante:* "+fm(saldo)+"\n";m+="\n✅ *Estado:* "+ev.estado;window.open("https://wa.me/?text="+encodeURIComponent(m),"_blank")}
+function shareWA(ev,cfg,pkgs,prices,mpkgs){var total=ct(ev,pkgs,prices,mpkgs),saldo=total-(ev.anticipo||0);var pName="";if(ev.tipo==="Por hora"){var pkg=pkgs.find(function(p){return p.id===ev.paquete_id});if(pkg)pName=" ("+pkg.nombre+")"}if(isTipo2(ev.tipo,cfg)){var mp=mpkgs.find(function(p){return p.id===ev.misa_paquete_id});if(mp)pName=" ("+mp.nombre+")"}var m="🎤 *"+cfg.nombre+" — Resumen de Evento*\n\n📋 *Tipo:* "+ev.tipo+pName+"\n📅 *Fecha:* "+fd(ev.fecha)+"\n";if(ev.hora)m+="🕐 *Inicio:* "+ft(ev.hora)+"\n🕐 *Fin:* "+calcEnd(ev.hora,ev.tipo==="Por hora"?ev.horas:1)+"\n";m+="💰 *Total:* "+fm(total)+"\n";if(ev.anticipo)m+="💵 *Anticipo:* "+fm(ev.anticipo)+"\n📊 *Restante:* "+fm(saldo)+"\n";if(ev.canciones&&ev.canciones.some(function(c){return c.trim()})){m+="\n🎵 *Canciones:*\n";ev.canciones.forEach(function(c,i){if(c.trim())m+="   "+(i+1)+". "+c+"\n"});}m+="\n✅ *Estado:* "+ev.estado;window.open("https://wa.me/?text="+encodeURIComponent(m),"_blank")}
 
 function confirmWA(ev,cfg,pkgs,prices,mpkgs){var total=ct(ev,pkgs,prices,mpkgs),saldo=total-(ev.anticipo||0);var m="Hola "+ev.contacto+", gracias por agendar su evento conmigo. 🎤\n\n";m+="📋 *Detalles confirmados:*\n";m+="🎤 *"+ev.tipo+"*\n";m+="📅 "+fd(ev.fecha)+"\n";m+="🕐 "+ft(ev.hora)+(ev.hora?" → "+calcEnd(ev.hora,ev.tipo==="Por hora"?ev.horas:1):"")+"\n";if(ev.direccion)m+="📍 "+ev.direccion+"\n";m+="\n";if(ev.anticipo>0){m+="Confirmo la recepción de su anticipo por *"+fm(ev.anticipo)+"*.\n";if(saldo>0)m+="Queda pendiente un saldo de *"+fm(saldo)+"*, el cual puede liquidar antes o el mismo día del evento.\n";else m+="Su evento se encuentra *liquidado en su totalidad*. ✅\n"}else{m+="El costo total del evento es de *"+fm(total)+"*.\n"}m+="\nEstamos en contacto para cualquier detalle. Gracias por su confianza. 🙏\n\n";m+="🎤 *"+cfg.nombre+"*\n━━━━━━━━━━━━━━━━━━\n";if(cfg.redes&&(cfg.redes.facebook||cfg.redes.instagram||cfg.redes.tiktok)){if(cfg.redes.facebook)m+="▪️ "+cfg.redes.facebook+"\n";if(cfg.redes.instagram)m+="▪️ "+cfg.redes.instagram+"\n";if(cfg.redes.tiktok)m+="▪️ "+cfg.redes.tiktok+"\n"}window.open(waUrl(ev.telefono)+"?text="+encodeURIComponent(m),"_blank")}
 
 function reviewWA(ev,cfg){var m="Hola "+ev.contacto+", ¡gracias por confiar en "+cfg.nombre+" para tu evento! 🎤\n\n¿Podrías dejarnos una reseña? Tu opinión nos ayuda a seguir creciendo. 🙏\n\n";if(cfg.redes&&cfg.redes.facebook)m+="👉 "+cfg.redes.facebook+"/reviews\n\n";m+="¡Muchas gracias! Fue un placer cantar para ti.\n\n🎤 *"+cfg.nombre+"*";if(cfg.redes&&cfg.redes.instagram)m+="\n▪️ "+cfg.redes.instagram;window.open(waUrl(ev.telefono)+"?text="+encodeURIComponent(m),"_blank")}
 
-function openGCal(ev,cfg,pkgs,prices,mpkgs){var sh=ev.hora||"19:00",p=sh.split(":"),dur=ev.tipo==="Misas"?1:(ev.horas||1);var eh=String(Math.min(23,parseInt(p[0])+dur)).padStart(2,"0");var total=ct(ev,pkgs,prices,mpkgs),saldo=total-(ev.anticipo||0);var ds=ev.fecha.replace(/-/g,"");var det=["Tipo: "+ev.tipo,"Contacto: "+ev.contacto,ev.telefono?"Tel: "+ev.telefono:"","Total: "+fm(total),ev.anticipo?"Anticipo: "+fm(ev.anticipo):"",saldo>0?"Pendiente: "+fm(saldo):"Pagado","Estado: "+ev.estado].filter(Boolean).join("\n");window.open("https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent("🎤 "+ev.tipo+" - "+ev.contacto)+"&dates="+ds+"T"+p[0]+p[1]+"00/"+ds+"T"+eh+p[1]+"00&details="+encodeURIComponent(det)+"&location="+encodeURIComponent(ev.direccion||""),"_blank")}
+function openGCal(ev,cfg,pkgs,prices,mpkgs){var sh=ev.hora||"19:00",p=sh.split(":"),dur=isTipo2(ev.tipo,cfg)?1:(ev.horas||1);var eh=String(Math.min(23,parseInt(p[0])+dur)).padStart(2,"0");var total=ct(ev,pkgs,prices,mpkgs),saldo=total-(ev.anticipo||0);var ds=ev.fecha.replace(/-/g,"");var det=["Tipo: "+ev.tipo,"Contacto: "+ev.contacto,ev.telefono?"Tel: "+ev.telefono:"","Total: "+fm(total),ev.anticipo?"Anticipo: "+fm(ev.anticipo):"",saldo>0?"Pendiente: "+fm(saldo):"Pagado","Estado: "+ev.estado].filter(Boolean).join("\n");window.open("https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent("🎤 "+ev.tipo+" - "+ev.contacto)+"&dates="+ds+"T"+p[0]+p[1]+"00/"+ds+"T"+eh+p[1]+"00&details="+encodeURIComponent(det)+"&location="+encodeURIComponent(ev.direccion||""),"_blank")}
 
 // ===== CHART =====
 function MChart(props){var ref=ur(null),cRef=ur(null);ue(function(){if(!ref.current)return;if(cRef.current)cRef.current.destroy();var d=new Array(12).fill(0),a=new Array(12).fill(0);var yr=parseInt(props.year)||new Date().getFullYear();var ac=props.color||"#9333EA";props.events.forEach(function(ev){var dt=new Date(ev.fecha+"T00:00:00");if(dt.getFullYear()===yr&&ev.estado!=="Cancelado"){d[dt.getMonth()]+=ct(ev,props.pkgs,props.prices,props.mpkgs);a[dt.getMonth()]+=(ev.anticipo||0)}});cRef.current=new Chart(ref.current,{type:"bar",data:{labels:MS.map(function(m){return m.slice(0,3)}),datasets:[{label:"Total",data:d,backgroundColor:ac+"99",borderColor:ac,borderWidth:1,borderRadius:5},{label:"Cobrado",data:a,backgroundColor:"rgba(0,175,100,0.5)",borderColor:"#00875a",borderWidth:1,borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:"#888",font:{family:"Outfit",size:11}}}},scales:{x:{ticks:{color:"#666",font:{size:10}},grid:{color:"rgba(255,255,255,0.02)"}},y:{ticks:{color:"#666",callback:function(v){return"$"+v.toLocaleString()},font:{size:10}},grid:{color:"rgba(255,255,255,0.04)"}}}}});return function(){if(cRef.current)cRef.current.destroy()}},[props.events,props.year,props.color]);return h("canvas",{ref:ref,style:{width:"100%",height:190}})}
@@ -769,9 +772,9 @@ function App(props){
   function doSubmit(){
     if(!form.fecha||!form.contacto||!form.tipo)return;
     var newId=editing?form.id:String(Date.now());
-    var ev=Object.assign({},form,{id:newId,horas:Number(form.horas)||1,anticipo:Number(form.anticipo)||0,personas:Number(form.personas)||0});
+    var ev=Object.assign({},form,{id:newId,horas:Number(form.horas)||1,anticipo:Number(form.anticipo)||0,personas:Number(form.personas)||0,canciones:form.canciones||["","","",""]});
     if(!editing&&ev.tipo==="Por hora"){var pkg=pkgs.find(function(p){return p.id===ev.paquete_id});ev.precioHora=pkg?pkg.precio:(pkgs[0]?pkgs[0].precio:0)}
-    if(!editing&&ev.tipo==="Misas"){var mp=mpkgs.find(function(p){return p.id===ev.misa_paquete_id});ev.precioMisas=mp?mp.precio:(mpkgs[0]?mpkgs[0].precio:0)}
+    if(!editing&&isTipo2(ev.tipo,cfg)){var mp=mpkgs.find(function(p){return p.id===ev.misa_paquete_id});ev.precioMisas=mp?mp.precio:(mpkgs[0]?mpkgs[0].precio:0)}
     var conf=checkConflict(ev);
     if(conf&&!confirm("⚠️ CONFLICTO: Ya tienes un evento ese día con "+conf.contacto+". ¿Agendar de todas formas?")){return}
     var arr=editing?events.map(function(x){return x.id===form.id?ev:x}):events.concat([ev]);
@@ -799,7 +802,7 @@ function App(props){
 
   var formPkg=pkgs.find(function(p){return p.id===form.paquete_id})||pkgs[0];
   var formMPkg=mpkgs.find(function(p){return p.id===form.misa_paquete_id})||mpkgs[0];
-  var tF=form.tipo==="Por hora"?(Number(form.horas)||1)*(formPkg?formPkg.precio:0):form.tipo==="Misas"?(formMPkg?formMPkg.precio:0):0;
+  var tF=form.tipo==="Por hora"?(Number(form.horas)||1)*(formPkg?formPkg.precio:0):isTipo2(form.tipo,cfg)?(formMPkg?formMPkg.precio:0):0;
   var sF=tF-(Number(form.anticipo)||0);
   var canSave=form.fecha&&form.contacto&&form.tipo;
   var filteredContacts=um(function(){if(!cSrch)return contacts;return contacts.filter(function(c){return c.name.toLowerCase().indexOf(cSrch.toLowerCase())>=0})},[contacts,cSrch]);
@@ -852,7 +855,7 @@ function App(props){
           h("div",{style:{fontSize:9,color:ac,fontWeight:700,letterSpacing:"1px",marginBottom:6}},"📌 PRÓXIMO EVENTO"),
           h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
             h("div",null,
-              h("span",{style:{color:"#fff",fontWeight:700,fontSize:14}},nextEv.tipo==="Misas"?"⛪ Misa":nextEv.tipo==="Bloqueado"?"🚫 Bloqueado":"🎤 Por hora"),
+              h("span",{style:{color:"#fff",fontWeight:700,fontSize:14}},isTipo2(nextEv.tipo,cfg)?(t2icono(cfg)+" "+nextEv.tipo):nextEv.tipo==="Bloqueado"?"🚫 Bloqueado":"🎤 Por hora"),
               h("span",{style:{color:"#777",fontSize:12,marginLeft:8}},nextEv.contacto),
               h("div",{style:{color:"#666",fontSize:11,marginTop:3}},fd(nextEv.fecha)+" · "+ft(nextEv.hora)+(nextEv.hora?" → "+calcEnd(nextEv.hora,nextEv.tipo==="Por hora"?nextEv.horas:1):""))
             ),
@@ -875,7 +878,7 @@ function App(props){
           :filtered.map(function(ev,idx){
             var st=gs(ev.fecha),sc=ST[st],total=ct(ev,pkgs,prices,mpkgs),saldo=total-(ev.anticipo||0),isExp=expId===ev.id,d=new Date(ev.fecha+"T00:00:00"),ec=EST_C[ev.estado]||EST_C.Pendiente;
             var pName="";if(ev.tipo==="Por hora"){var pkg=pkgs.find(function(p){return p.id===ev.paquete_id});if(pkg)pName=" · "+pkg.nombre}
-            if(ev.tipo==="Misas"){var mp=mpkgs.find(function(p){return p.id===ev.misa_paquete_id});if(mp)pName=" · "+mp.nombre}
+            if(isTipo2(ev.tipo,cfg)){var mp=mpkgs.find(function(p){return p.id===ev.misa_paquete_id});if(mp)pName=" · "+mp.nombre}
             return h("div",{key:ev.id,className:"ev-card",onClick:function(){setExpId(isExp?null:ev.id)},style:{border:"1px solid "+sc.bd,borderRadius:13,padding:"11px 13px",cursor:"pointer",background:sc.bg,animation:"cardEnter 0.38s ease both",animationDelay:(idx*0.055)+"s"}},
               h("div",{style:{display:"flex",alignItems:"center",gap:12}},
                 h("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",minWidth:38}},
@@ -884,7 +887,7 @@ function App(props){
                 ),
                 h("div",{style:{flex:1,minWidth:0}},
                   h("div",{style:{display:"flex",alignItems:"center",gap:4,marginBottom:3,flexWrap:"wrap"}},
-                    h("span",{style:{fontSize:13,fontWeight:600,color:ev.tipo==="Bloqueado"?"#666":"#fff"}},ev.tipo==="Misas"?"⛪ Misa"+pName:ev.tipo==="Bloqueado"?"🚫 "+ev.contacto:"🎤 Por hora"+pName),
+                    h("span",{style:{fontSize:13,fontWeight:600,color:ev.tipo==="Bloqueado"?"#666":"#fff"}},isTipo2(ev.tipo,cfg)?(t2icono(cfg)+" "+ev.tipo+pName):ev.tipo==="Bloqueado"?"🚫 "+ev.contacto:"🎤 Por hora"+pName),
                     h("span",{style:{fontSize:7,fontWeight:700,padding:"2px 6px",borderRadius:4,background:ec.bg,color:"#fff",letterSpacing:"0.3px"}},ev.estado),
                     h("span",{style:{fontSize:7,fontWeight:700,padding:"2px 5px",borderRadius:4,background:sc.badge+"22",color:sc.badge}},sc.lb)
                   ),
@@ -913,7 +916,11 @@ function App(props){
                   h("div",null,h("span",{style:{fontSize:10,color:ac}},"💵 "),h("span",{style:{color:"#aaa"}},fm(ev.anticipo))),
                   h("div",null,h("span",{style:{fontSize:10,color:ac}},"📊 "),h("span",{style:{color:saldo>0?"#ff6b6b":"#00c896",fontWeight:700}},fm(saldo))),
                   h("div",null,h("span",{style:{fontSize:10,color:ac}},"🔢 "),h("span",{style:{color:"#666",fontSize:10}},folio(ev.id,events,cfg))),
-                  ev.notas&&h("div",{style:{gridColumn:"1/-1"}},h("span",{style:{fontSize:10,color:ac}},"📝 "),h("span",{style:{color:"#aaa",fontSize:11}},ev.notas))
+                  ev.notas&&h("div",{style:{gridColumn:"1/-1"}},h("span",{style:{fontSize:10,color:ac}},"📝 "),h("span",{style:{color:"#aaa",fontSize:11}},ev.notas)),
+                  ev.canciones&&ev.canciones.some(function(c){return c.trim()})&&h("div",{style:{gridColumn:"1/-1",background:acA(0.04),border:"1px solid "+acA(0.1),borderRadius:9,padding:"8px 12px"}},
+                    h("div",{style:{fontSize:10,color:ac,fontWeight:700,marginBottom:5}},"🎵 Canciones"),
+                    ev.canciones.filter(function(c){return c.trim()}).map(function(c,i){return h("div",{key:i,style:{fontSize:12,color:"#ccc",padding:"2px 0"}},h("span",{style:{color:ac,marginRight:6}},(i+1)+"."),c)})
+                  )
                 ),
                 h("button",{onClick:function(e){e.stopPropagation();openGCal(ev,cfg,pkgs,prices,mpkgs)},style:{width:"100%",padding:"9px",borderRadius:9,fontSize:12,fontWeight:600,cursor:"pointer",background:"rgba(66,133,244,0.06)",border:"1px solid rgba(66,133,244,0.18)",color:"#4285f4",fontFamily:"'Outfit',sans-serif",marginBottom:6}},"📅 Agregar a Google Calendar"),
                 saldo>0&&h("button",{onClick:function(e){e.stopPropagation();markPaid(ev)},style:{width:"100%",padding:"9px",borderRadius:9,fontSize:12,fontWeight:600,cursor:"pointer",background:"rgba(0,175,100,0.06)",border:"1px solid rgba(0,175,100,0.18)",color:"#00c896",fontFamily:"'Outfit',sans-serif",marginBottom:6}},"💰 Marcar como pagado ("+fm(saldo)+")"),
@@ -1106,10 +1113,30 @@ function App(props){
             "+ Agregar paquete")
         ),
 
-        // Paquetes Misas
+        // Tipo 2 config + paquetes
         h("div",{className:"card-section"},
-          h("h3",null,"⛪ Paquetes de Misas"),
-          h("p",{style:{color:"#666",fontSize:10,marginBottom:12}},"Define los paquetes para misas y ceremonias religiosas."),
+          h("h3",null,t2icono(cfg)+" Segundo Tipo de Evento"),
+          h("p",{style:{color:"#666",fontSize:11,marginBottom:12}},"Personaliza el nombre y el ícono del segundo tipo. Puede ser Misas, Serenatas, Bodas, etc."),
+          h("div",{style:{display:"grid",gridTemplateColumns:"1fr auto",gap:10,marginBottom:14}},
+            h("div",null,
+              h("label",{style:LB},"Nombre del tipo"),
+              h("input",{type:"text",style:I,placeholder:"Misas, Serenatas, Bodas...",value:cfg.tipo2_nombre,onChange:function(e){cfgUpd("tipo2_nombre",e.target.value||"Misas")}})
+            ),
+            h("div",null,
+              h("label",{style:LB},"Ícono"),
+              h("input",{type:"text",style:Object.assign({},I,{width:64,textAlign:"center",fontSize:20}),maxLength:2,value:cfg.tipo2_icono,onChange:function(e){cfgUpd("tipo2_icono",e.target.value||"⛪")}})
+            )
+          ),
+          h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,padding:"10px 12px",background:"rgba(255,255,255,0.02)",borderRadius:10,border:"1px solid rgba(255,255,255,0.06)"}},
+            h("div",null,
+              h("p",{style:{color:"#ccc",fontSize:13,fontWeight:600}},"Mostrar en cotizar.html"),
+              h("p",{style:{color:"#666",fontSize:11}},"Los clientes podrán cotizar este tipo de evento")
+            ),
+            h("div",{onClick:function(){cfgUpd("tipo2_en_cotizar",!cfg.tipo2_en_cotizar)},style:{width:44,height:24,borderRadius:12,background:cfg.tipo2_en_cotizar?ac:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",transition:"background 0.3s",flexShrink:0}},
+              h("div",{style:{position:"absolute",top:4,left:cfg.tipo2_en_cotizar?22:4,width:16,height:16,borderRadius:8,background:"#fff",transition:"left 0.3s"}})
+            )
+          ),
+          h("p",{style:{color:"#666",fontSize:10,marginBottom:10}},"Paquetes y precios para "+t2nombre(cfg)+":"),
           mpkgs.map(function(pkg,i){return h("div",{key:pkg.id,style:{display:"flex",alignItems:"center",gap:8,marginBottom:8}},
             h("input",{type:"text",style:Object.assign({},I,{flex:1}),value:pkg.nombre,onChange:function(e){var np=mpkgs.slice();np[i]=Object.assign({},np[i],{nombre:e.target.value});setMPkgs(np);saveMPkg(np)}}),
             h("span",{style:{color:"#666",fontSize:14}},"$"),
@@ -1117,7 +1144,7 @@ function App(props){
             mpkgs.length>1&&h("button",{onClick:function(){var np=mpkgs.filter(function(_,j){return j!==i});setMPkgs(np);saveMPkg(np)},style:{background:"none",border:"none",color:"#ff3333",fontSize:16,cursor:"pointer"}},"✕")
           )}),
           h("button",{onClick:function(){var np=mpkgs.concat([{id:"m"+Date.now(),nombre:"Nuevo paquete",precio:0}]);setMPkgs(np);saveMPkg(np)},style:{width:"100%",padding:"9px",borderRadius:10,fontSize:12,fontWeight:600,cursor:"pointer",background:acA(0.07),border:"1px solid "+acA(0.2),color:ac,fontFamily:"'Outfit',sans-serif"}},
-            "+ Agregar paquete de misa")
+            "+ Agregar paquete")
         ),
 
         // QR Cotización
@@ -1186,12 +1213,12 @@ function App(props){
         h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:11}},
           // Type selector
           h("div",{style:{gridColumn:"1/-1",display:"flex",gap:8}},
-            ["Por hora","Misas","Bloqueado"].map(function(t){
-              var ac2=form.tipo===t,isB=t==="Bloqueado",isM=t==="Misas";
-              return h("div",{key:t,onClick:function(){upd("tipo",t);if(t==="Por hora"&&!form.paquete_id&&pkgs.length)upd("paquete_id",pkgs[0].id);if(t==="Misas"&&!form.misa_paquete_id&&mpkgs.length)upd("misa_paquete_id",mpkgs[0].id)},style:{flex:1,textAlign:"center",padding:"11px 6px",borderRadius:12,cursor:"pointer",fontWeight:600,fontSize:12,background:ac2?(isB?"rgba(100,100,100,0.12)":acA(0.14)):"rgba(255,255,255,0.03)",color:ac2?(isB?"#999":ac):"#666",border:"1px solid "+(ac2?(isB?"rgba(100,100,100,0.35)":acA(0.35)):"rgba(255,255,255,0.06)"),transition:"all 0.2s"}},
-                h("div",{style:{fontSize:17,marginBottom:3}},t==="Por hora"?"🕐":isM?"⛪":"🚫"),
+            ["Por hora",t2nombre(cfg),"Bloqueado"].map(function(t){
+              var ac2=form.tipo===t,isB=t==="Bloqueado",isT2=isTipo2(t,cfg);
+              return h("div",{key:t,onClick:function(){upd("tipo",t);if(t==="Por hora"&&!form.paquete_id&&pkgs.length)upd("paquete_id",pkgs[0].id);if(isT2&&!form.misa_paquete_id&&mpkgs.length)upd("misa_paquete_id",mpkgs[0].id)},style:{flex:1,textAlign:"center",padding:"11px 6px",borderRadius:12,cursor:"pointer",fontWeight:600,fontSize:12,background:ac2?(isB?"rgba(100,100,100,0.12)":acA(0.14)):"rgba(255,255,255,0.03)",color:ac2?(isB?"#999":ac):"#666",border:"1px solid "+(ac2?(isB?"rgba(100,100,100,0.35)":acA(0.35)):"rgba(255,255,255,0.06)"),transition:"all 0.2s"}},
+                h("div",{style:{fontSize:17,marginBottom:3}},t==="Por hora"?"🕐":isT2?t2icono(cfg):"🚫"),
                 t,
-                h("div",{style:{fontSize:9,color:ac2?(isB?"#777":ac):"#555",fontWeight:400,marginTop:1}},t==="Por hora"?(pkgs[0]?fm(pkgs[0].precio)+"/hr":""):isM?(mpkgs[0]?"Desde "+fm(mpkgs[0].precio):""):"Personal")
+                h("div",{style:{fontSize:9,color:ac2?(isB?"#777":ac):"#555",fontWeight:400,marginTop:1}},t==="Por hora"?(pkgs[0]?fm(pkgs[0].precio)+"/hr":""):isT2?(mpkgs[0]?"Desde "+fm(mpkgs[0].precio):""):"Personal")
               )
             })
           ),
@@ -1222,21 +1249,31 @@ function App(props){
               h("span",{style:{color:"#666",fontSize:10,marginLeft:8}},(Number(form.horas)||1)+"h")
             )
           ),
-          form.tipo==="Misas"&&h("div",{style:{gridColumn:"1/-1"}},
+          isTipo2(form.tipo,cfg)&&h("div",{style:{gridColumn:"1/-1"}},
             mpkgs.length>1&&h("div",{style:{marginBottom:8}},
-              h("label",{style:LB},"Paquete de Misa"),
+              h("label",{style:LB},"Paquete de "+t2nombre(cfg)),
               h("select",{style:Object.assign({},I,{cursor:"pointer"}),value:form.misa_paquete_id||"",onChange:function(e){upd("misa_paquete_id",e.target.value)}},
                 mpkgs.map(function(p){return h("option",{key:p.id,value:p.id},p.nombre+" — "+fm(p.precio))})
               )
             ),
             mpkgs.length===1&&h("div",{style:{background:acA(0.05),border:"1px solid "+acA(0.12),borderRadius:10,padding:"10px 12px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}},
-              h("span",{style:{color:"#ccc",fontSize:13}},"⛪ "+mpkgs[0].nombre),
+              h("span",{style:{color:"#ccc",fontSize:13}},t2icono(cfg)+" "+mpkgs[0].nombre),
               h("span",{style:{color:ac,fontWeight:700,fontFamily:JM}},fm(mpkgs[0].precio))
             ),
-            form.hora&&h("div",{style:{background:acA(0.05),border:"1px solid "+acA(0.12),borderRadius:9,padding:"8px 12px"}},
+            form.hora&&h("div",{style:{background:acA(0.05),border:"1px solid "+acA(0.12),borderRadius:9,padding:"8px 12px",marginBottom:8}},
               h("span",{style:{color:ac,fontSize:11}},"🕐 "),h("span",{style:{color:"#fff",fontWeight:600}},ft(form.hora)),
               h("span",{style:{color:"#777"}}," → "),h("span",{style:{color:ac,fontWeight:700}},calcEnd(form.hora,1)),
               h("span",{style:{color:"#666",fontSize:10,marginLeft:8}},"~1h")
+            ),
+            // ── CANCIONES ─────────────────────────────────
+            h("div",{style:{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 14px"}},
+              h("div",{style:{fontSize:10,color:ac,fontWeight:700,letterSpacing:"0.5px",marginBottom:10}},"🎵 CANCIONES (opcional)"),
+              [0,1,2,3].map(function(i){
+                return h("div",{key:i,style:{display:"flex",alignItems:"center",gap:8,marginBottom:i<3?8:0}},
+                  h("div",{style:{width:20,height:20,borderRadius:"50%",background:acA(0.15),border:"1px solid "+acA(0.3),display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:ac,flexShrink:0}},i+1),
+                  h("input",{type:"text",style:Object.assign({},I,{fontSize:13}),placeholder:"Nombre de la canción...",value:(form.canciones&&form.canciones[i])||"",onChange:function(idx){return function(e){var c=(form.canciones||["","","",""]).slice();c[idx]=e.target.value;upd("canciones",c)}}(i)})
+                )
+              })
             )
           ),
           // Contact
