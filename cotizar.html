@@ -338,6 +338,9 @@ var CFG=loadFromApp("oc-config",DEF_CFG);
 CFG.redes=Object.assign({},DEF_CFG.redes,CFG.redes||{});
 var MI_NUMERO=CFG.whatsapp||"";
 var NOMBRE_ARTISTA=CFG.nombre||"Artista Musical";
+var TIPO2_NOMBRE=CFG.tipo2_nombre||"Misas";
+var TIPO2_ICONO=CFG.tipo2_icono||"⛪";
+var TIPO2_VISIBLE=CFG.tipo2_en_cotizar!==false;
 var PAQUETES=loadFromApp("oc-paquetes",DEF_PKG);
 var PAQUETES_MISA=loadFromApp("oc-misa-paquetes",DEF_MPKG);
 
@@ -435,10 +438,22 @@ var horaSelect=document.getElementById("hora");
     var el=document.getElementById("price-hora");
     if(el)el.textContent="Desde $"+minP.toLocaleString("es-CO")+"/hr";
   }
-  if(PAQUETES_MISA.length){
-    var minM=Math.min.apply(null,PAQUETES_MISA.map(function(p){return p.precio}));
-    var el2=document.getElementById("price-misa");
-    if(el2)el2.textContent="Desde $"+minM.toLocaleString("es-CO");
+  // Tipo2 button: update name, icon, price, visibility
+  var btnMisa=document.getElementById("btn-misa");
+  if(btnMisa){
+    if(!TIPO2_VISIBLE){
+      btnMisa.style.display="none";
+    } else {
+      var t2icon=btnMisa.querySelector(".t-icon");
+      var t2name=btnMisa.querySelector(".t-name");
+      var t2price=btnMisa.querySelector(".t-price");
+      if(t2icon)t2icon.textContent=TIPO2_ICONO;
+      if(t2name)t2name.textContent=TIPO2_NOMBRE;
+      if(t2price&&PAQUETES_MISA.length){
+        var minM=Math.min.apply(null,PAQUETES_MISA.map(function(p){return p.precio}));
+        t2price.textContent="Desde $"+minM.toLocaleString("es-CO");
+      }
+    }
   }
 
   // Social links in footer
@@ -596,8 +611,8 @@ function enviar(){
     m+="📋 *Tipo:* Por Hora ("+horas+" hr"+(horas>1?"s":"")+")\n";
     if(selectedPkg)m+="🎤 *Paquete:* "+selectedPkg.nombre+"\n";
   }else{
-    m+="📋 *Tipo:* Misa / Ceremonia Religiosa\n";
-    if(selectedMPkg)m+="⛪ *Paquete:* "+selectedMPkg.nombre+"\n";
+    m+="📋 *Tipo:* "+TIPO2_NOMBRE+"\n";
+    if(selectedMPkg)m+=""+TIPO2_ICONO+" *Paquete:* "+selectedMPkg.nombre+"\n";
   }
   m+="📅 *Fecha:* "+fechaF+"\n";
   m+="🕐 *Inicio:* "+fmtTime(hora)+"\n";
