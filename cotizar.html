@@ -225,6 +225,12 @@ textarea.input{min-height:80px;resize:vertical}
         <div class="label">Seleccione su paquete de misa</div>
         <div id="mpkg-list"></div>
       </div>
+
+      <!-- CANCIONES: aparece cuando tipo2 está seleccionado -->
+      <div id="canciones-box" style="display:none;margin-top:18px">
+        <div class="label" style="margin-bottom:10px">🎵 Elija hasta 4 canciones <span style="color:#555;font-weight:400;text-transform:none;letter-spacing:0">(opcional)</span></div>
+        <div id="canciones-list"></div>
+      </div>
     </div>
 
     <!-- STEP 2: Datos del evento -->
@@ -345,6 +351,8 @@ var PAQUETES=loadFromApp("oc-paquetes",DEF_PKG);
 var PAQUETES_MISA=loadFromApp("oc-misa-paquetes",DEF_MPKG);
 
 var tipo="",selectedPkg=null,selectedMPkg=null;
+var REPERTORIO=loadFromApp("oc-repertorio",[]);
+var REPERT_BY_CAT=(function(){var m={};REPERTORIO.forEach(function(r){if(!m[r.cat])m[r.cat]=[];m[r.cat].push(r.song)});return m})();
 var MS=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 var DIAS=["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
 
@@ -529,6 +537,47 @@ function showDate(){
 }
 
 // ===== SELECT TYPE =====
+function renderCanciones(){
+  var box=document.getElementById("canciones-list");
+  if(!box)return;
+  box.innerHTML="";
+  var catList=Object.keys(REPERT_BY_CAT);
+  for(var i=0;i<4;i++){
+    var row=document.createElement("div");
+    row.style.cssText="display:flex;align-items:center;gap:8px;margin-bottom:"+(i<3?"8px":"0");
+    var num=document.createElement("div");
+    num.style.cssText="width:20px;height:20px;border-radius:50%;background:rgba(var(--ac-rgb),0.15);border:1px solid rgba(var(--ac-rgb),0.3);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--ac);flex-shrink:0;min-width:20px;text-align:center;line-height:20px";
+    num.textContent=i+1;
+    var input;
+    if(catList.length>0){
+      input=document.createElement("select");
+      input.className="input";
+      input.style.fontSize="13px";
+      input.setAttribute("data-cancion-idx",i);
+      var defOpt=document.createElement("option");defOpt.value="";defOpt.textContent="— Elegir canción —";input.appendChild(defOpt);
+      catList.forEach(function(cat){
+        var og=document.createElement("optgroup");og.label=cat;
+        REPERT_BY_CAT[cat].forEach(function(song){var o=document.createElement("option");o.value=song;o.textContent=song;og.appendChild(o)});
+        input.appendChild(og);
+      });
+    }else{
+      input=document.createElement("input");
+      input.type="text";input.className="input";
+      input.placeholder="Nombre de la canción...";
+      input.style.fontSize="13px";
+      input.setAttribute("data-cancion-idx",i);
+    }
+    row.appendChild(num);row.appendChild(input);box.appendChild(row);
+  }
+}
+
+function getCancionesSeleccionadas(){
+  var items=document.querySelectorAll("#canciones-list [data-cancion-idx]");
+  var result=[];
+  items.forEach(function(el){var v=el.value||el.textContent;if(v&&v.trim())result.push(v.trim())});
+  return result;
+}
+
 function selType(t){
   tipo=t;
   document.getElementById("btn-hora").className="type-opt"+(t==="hora"?" active":"");
@@ -537,13 +586,16 @@ function selType(t){
   document.getElementById("pkg-box").className="pkg-box"+(t==="hora"?" show":"");
   document.getElementById("misa-box").className="misa-box"+(t==="misa"?" show":"");
   document.getElementById("price-sum").className="price-sum show";
+  // Show canciones box for tipo2
+  var cancionesBox=document.getElementById("canciones-box");
+  if(cancionesBox)cancionesBox.style.display=t==="misa"?"block":"none";
   if(t==="hora"&&!selectedPkg&&PAQUETES.length){
     selectedPkg=PAQUETES[0];
     document.getElementById("pkg-price-label").textContent="$"+selectedPkg.precio.toLocaleString("es-CO");
   }
   if(t==="hora")renderPkgs();
   if(t==="misa"&&!selectedMPkg&&PAQUETES_MISA.length)selectedMPkg=PAQUETES_MISA[0];
-  if(t==="misa")renderMPkgs();
+  if(t==="misa"){renderMPkgs();renderCanciones();}
   calcAll();checkForm();
 }
 
@@ -622,7 +674,13 @@ function enviar(){
   if(personas)m+="👥 *Invitados aprox.:* "+personas+"\n";
   m+="\n💰 *Total estimado:* $"+total.toLocaleString("es-CO")+"\n";
   if(notas)m+="\n📝 *Notas:* "+notas+"\n";
-  m+="\n━━━━━━━━━━━━━━━━━━\n_Enviado desde el formulario de "+NOMBRE_ARTISTA+"_";
+  // Canciones seleccionadas
+  var canciones=getCancionesSeleccionadas();
+  if(canciones.length>0){
+    m+="\n🎵 *Canciones solicitadas:*\n";
+    canciones.forEach(function(c,i){m+="   "+(i+1)+". "+c+"\n"});
+  }
+  m+="\n━━━━━━━━━━━━━━━━━━\n_Enviado desde el formulario de "+NOMBRE_ARTISTA+" · OC AGENDA_";
 
   var num=MI_NUMERO.replace(/\D/g,"");
   var waLink="https://wa.me/"+num+"?text="+encodeURIComponent(m);
@@ -648,6 +706,8 @@ function resetForm(){
   document.getElementById("hours-box").className="hours-box";
   document.getElementById("pkg-box").className="pkg-box";
   document.getElementById("misa-box").className="misa-box";
+  var cb=document.getElementById("canciones-box");if(cb)cb.style.display="none";
+  var cl=document.getElementById("canciones-list");if(cl)cl.innerHTML="";
   document.getElementById("price-sum").className="price-sum";
   document.getElementById("sched").className="sched";
   document.querySelectorAll(".card").forEach(function(c){c.classList.remove("visible")});
