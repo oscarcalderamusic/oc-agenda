@@ -66,11 +66,12 @@ input,select,textarea{font-family:'Outfit',sans-serif;color-scheme:dark}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 (function(){
 var h=React.createElement,us=React.useState,ue=React.useEffect,um=React.useMemo,ur=React.useRef;
 var MS=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-var KEY="oc-agenda-v8",CFG_KEY="oc-config",PKG_KEY="oc-paquetes",MPKG_KEY="oc-misa-paquetes",PRICE_KEY="oc-precios";
+var KEY="oc-agenda-v8",CFG_KEY="oc-config",PKG_KEY="oc-paquetes",MPKG_KEY="oc-misa-paquetes",PRICE_KEY="oc-precios",REPERT_KEY="oc-repertorio";
 var ESTADOS=["Pendiente","Confirmado","Cancelado"];
 var EST_C={Pendiente:{bg:"#e07b00"},Confirmado:{bg:"#00875a"},Cancelado:{bg:"#b00000"}};
 
@@ -107,6 +108,10 @@ function saveMPkg(p){localStorage.setItem(MPKG_KEY,JSON.stringify(p))}
 
 function loadPrices(){try{var p=JSON.parse(localStorage.getItem(PRICE_KEY));return p||{misas:1500}}catch(e){return{misas:1500}}}
 function savePrices(p){localStorage.setItem(PRICE_KEY,JSON.stringify(p))}
+
+function loadRepertorio(){try{var r=JSON.parse(localStorage.getItem(REPERT_KEY));return Array.isArray(r)?r:[]}catch(e){return[]}}
+function saveRepertorio(r){localStorage.setItem(REPERT_KEY,JSON.stringify(r))}
+function reperByCategory(rep){var m={};rep.forEach(function(r){if(!m[r.cat])m[r.cat]=[];m[r.cat].push(r.song)});return m}
 
 function hexToRgb(hex){
   if(!hex||hex.length<7)return{r:147,g:51,b:234};
@@ -698,7 +703,7 @@ function Root(){
 
 // ===== MAIN APP =====
 function App(props){
-  var _cfg=us(props.cfg0),cfg=_cfg[0],setCfg=_cfg[1];
+  var _rep=us(loadRepertorio),repertorio=_rep[0],setRepertorio=_rep[1];
   var _pkgs=us(loadPkg),pkgs=_pkgs[0],setPkgs=_pkgs[1];
   var _mpkgs=us(loadMPkg),mpkgs=_mpkgs[0],setMPkgs=_mpkgs[1];
   var _prices=us(loadPrices),prices=_prices[0],setPrices=_prices[1];
@@ -730,26 +735,40 @@ function App(props){
   function upd(k,v){var o=Object.assign({},form);o[k]=v;setForm(o)}
   function close(){setForm(Object.assign({},EMPTY,{telefono:cfg.telefono_lada}));setShowForm(false);setEditing(false);setSgShow(false);setShowImport(false);setImpTxt("")}
 
-  function parseWA(txt){
-    var f=Object.assign({},EMPTY,{telefono:cfg.telefono_lada});
+  function parseWA(txt,cfg2){
+    var f=Object.assign({},EMPTY,{telefono:cfg2&&cfg2.telefono_lada?cfg2.telefono_lada:""});
     var MS_MAP={"enero":0,"febrero":1,"marzo":2,"abril":3,"mayo":4,"junio":5,"julio":6,"agosto":7,"septiembre":8,"octubre":9,"noviembre":10,"diciembre":11};
+    // Strip bold markers, emojis-adjacent noise
     var clean=txt.replace(/\*/g,"");var m;
     m=clean.match(/Cliente:\s*(.+)/i);if(m)f.contacto=m[1].trim();
     m=clean.match(/Tel[ée]fono:\s*(.+)/i);if(m)f.telefono=m[1].trim();
-    m=clean.match(/Fecha:\s*(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})/i);
-    if(m){var mo=MS_MAP[m[2].toLowerCase()];if(mo!==undefined){f.fecha=m[3]+"-"+String(mo+1).padStart(2,"0")+"-"+m[1].padStart(2,"0")}}
+    // Date — handle optional day name prefix: "Jueves 23 de Abril de 2026" OR "23 de Abril de 2026"
+    m=clean.match(/Fecha:\s*(?:[A-Za-z\u00C0-\u024F]+\s+)?(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})/i);
+    if(m){var mo2=MS_MAP[m[2].toLowerCase()];if(mo2!==undefined)f.fecha=m[3]+"-"+String(mo2+1).padStart(2,"0")+"-"+m[1].padStart(2,"0")}
     if(!f.fecha){m=clean.match(/Fecha:\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i);if(m)f.fecha=m[3]+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0")}
+    // Time
     m=clean.match(/Inicio:\s*(\d{1,2}:\d{2}\s*[AP]M)/i);
     if(m){var tp=m[1].trim().match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);if(tp){var hr=parseInt(tp[1]);if(tp[3].toUpperCase()==="PM"&&hr<12)hr+=12;if(tp[3].toUpperCase()==="AM"&&hr===12)hr=0;f.hora=String(hr).padStart(2,"0")+":"+tp[2]}}
+    // Tipo — check cfg tipo2_nombre first, then Misa fallback, then Por hora
     m=clean.match(/Tipo:\s*(.+)/i);
-    if(m){var tipo=m[1].trim();if(tipo.indexOf("Misa")>=0||tipo.indexOf("misa")>=0)f.tipo="Misas";else f.tipo="Por hora";var hm=tipo.match(/(\d+)\s*hrs?/i);if(hm)f.horas=hm[1]}
+    if(m){
+      var tipoRaw=m[1].trim();
+      var t2n=cfg2&&cfg2.tipo2_nombre?cfg2.tipo2_nombre:"Misas";
+      if(tipoRaw.toLowerCase().indexOf(t2n.toLowerCase())>=0||tipoRaw.toLowerCase().indexOf("misa")>=0){
+        f.tipo=t2n;
+      }else{
+        f.tipo="Por hora";
+        var hm=tipoRaw.match(/(\d+)\s*hr/i);if(hm)f.horas=hm[1];
+      }
+    }
     if(!f.horas||f.horas==="1"){m=clean.match(/Duraci[oó]n:\s*(\d+)/i);if(m)f.horas=m[1]}
     m=clean.match(/Lugar:\s*(.+)/i);if(m)f.direccion=m[1].trim();
-    m=clean.match(/(?:Personas|Invitados):\s*(\d+)/i);if(m)f.personas=m[1];
+    // People — handles "Invitados aprox.:", "Invitados:", "Personas:"
+    m=clean.match(/(?:Personas|Invitados)[^:]*:\s*(\d+)/i);if(m)f.personas=m[1];
     m=clean.match(/Notas:\s*(.+)/i);if(m)f.notas=m[1].trim();
     return f;
   }
-  function doImport(){if(!impTxt.trim()){ntf("Pega el mensaje de WhatsApp","err");return}var parsed=parseWA(impTxt);if(!parsed.contacto){ntf("No se encontró el nombre del cliente","err");return}setForm(parsed);setShowImport(false);setImpTxt("");setShowForm(true);setEditing(false);ntf("Datos importados — revisa y toca Agregar")}
+  function doImport(){if(!impTxt.trim()){ntf("Pega el mensaje de WhatsApp","err");return}var parsed=parseWA(impTxt,cfg);if(!parsed.contacto){ntf("No se encontró el nombre del cliente","err");return}setForm(parsed);setShowImport(false);setImpTxt("");setShowForm(true);setEditing(false);ntf("Datos importados — revisa y toca Agregar")}
   ue(function(){reqNotif();var iv=setInterval(function(){chkReminders(events)},60000);chkReminders(events);return function(){clearInterval(iv)}},[events]);
 
   var contacts=um(function(){var c={};events.forEach(function(ev){if(!ev.contacto||ev.tipo==="Bloqueado")return;var k=ev.contacto.toLowerCase().trim();if(!c[k])c[k]={name:ev.contacto,tel:ev.telefono||"",count:0,total:0,last:""};c[k].count++;c[k].total+=ct(ev,pkgs,prices,mpkgs);if(!c[k].tel&&ev.telefono)c[k].tel=ev.telefono;if(ev.fecha>c[k].last)c[k].last=ev.fecha});return Object.values(c).sort(function(a,b){return b.count-a.count})},[events,pkgs,prices,mpkgs]);
@@ -792,6 +811,30 @@ function App(props){
   function importD(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(ev){try{var d=JSON.parse(ev.target.result);if(Array.isArray(d)){save(d);ntf(d.length+" eventos restaurados")}else ntf("Archivo inválido","err")}catch(er){ntf("Error al leer archivo","err")}};r.readAsText(f)}
   function handleLogo(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(ev){var nc=Object.assign({},cfg,{logo:ev.target.result});setCfg(nc);saveCfg(nc);ntf("Logo actualizado ✓")};r.readAsDataURL(f)}
   function handleFirma(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(ev){var nc=Object.assign({},cfg,{firma:ev.target.result});setCfg(nc);saveCfg(nc);ntf("Firma actualizada ✓")};r.readAsDataURL(f)}
+  function handleRepertorioXLSX(e){
+    var f=e.target.files[0];if(!f)return;
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      try{
+        var XLSX=window.XLSX;
+        var wb=XLSX.read(ev.target.result,{type:"array"});
+        var ws=wb.Sheets[wb.SheetNames[0]];
+        var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+        if(rows.length<2){ntf("Excel vacío o sin datos","err");return}
+        // Detect columns — look for "categoría" and "canción" (case/accent insensitive)
+        var headers=rows[0].map(function(h){return String(h).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")});
+        var catIdx=headers.findIndex(function(h){return h.indexOf("categ")>=0});
+        var songIdx=headers.findIndex(function(h){return h.indexOf("canci")>=0||h.indexOf("cancion")>=0||h.indexOf("song")>=0||h.indexOf("nombre")>=0});
+        if(catIdx<0||songIdx<0){ntf("No se encontraron columnas Categoría / Canción","err");return}
+        var rep=rows.slice(1).filter(function(r){return r[catIdx]&&r[songIdx]}).map(function(r){return{cat:String(r[catIdx]).trim(),song:String(r[songIdx]).trim()}});
+        if(rep.length===0){ntf("No se encontraron canciones","err");return}
+        saveRepertorio(rep);setRepertorio(rep);
+        var cats=Object.keys(reperByCategory(rep)).length;
+        ntf("✓ "+rep.length+" canciones en "+cats+" categorías importadas");
+      }catch(err){ntf("Error leyendo el Excel","err");console.error(err)}
+    };
+    reader.readAsArrayBuffer(f);
+  }
 
   var years=um(function(){var s={};events.forEach(function(x){s[new Date(x.fecha+"T00:00:00").getFullYear()]=1});s[new Date().getFullYear()]=1;return Object.keys(s).map(Number).sort(function(a,b){return b-a})},[events]);
   var filtered=um(function(){return events.filter(function(x){var d=new Date(x.fecha+"T00:00:00");if(fYear!=="all"&&d.getFullYear()!==parseInt(fYear))return false;if(fMonth!=="all"&&d.getMonth()!==parseInt(fMonth))return false;if(srch){var s=srch.toLowerCase();if((x.contacto||"").toLowerCase().indexOf(s)<0&&(x.direccion||"").toLowerCase().indexOf(s)<0&&(x.fecha||"").indexOf(s)<0&&fd(x.fecha).indexOf(s)<0)return false}return true}).sort(function(a,b){return new Date(a.fecha)-new Date(b.fecha)})},[events,fMonth,fYear,srch]);
@@ -1113,6 +1156,32 @@ function App(props){
             "+ Agregar paquete")
         ),
 
+        // Repertorio
+        h("div",{className:"card-section"},
+          h("h3",null,"🎵 Repertorio de Canciones"),
+          h("p",{style:{color:"#666",fontSize:11,marginBottom:12}},"Importa un Excel con columnas «Categoría» y «Canción». Los clientes podrán elegir del repertorio al solicitar "+t2nombre(cfg)+"."),
+          repertorio.length>0&&h("div",null,
+            h("div",{style:{background:acA(0.06),border:"1px solid "+acA(0.15),borderRadius:10,padding:"10px 14px",marginBottom:10}},
+              h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}},
+                h("span",{style:{color:ac,fontWeight:700,fontSize:13}},"✓ "+repertorio.length+" canciones cargadas"),
+                h("span",{style:{color:"#666",fontSize:11}},Object.keys(reperByCategory(repertorio)).length+" categorías")
+              ),
+              h("div",{style:{display:"flex",flexWrap:"wrap",gap:5}},
+                Object.keys(reperByCategory(repertorio)).map(function(cat){
+                  return h("span",{key:cat,style:{fontSize:10,color:"#aaa",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:6,padding:"2px 8px"}},cat+" ("+reperByCategory(repertorio)[cat].length+")")
+                })
+              )
+            )
+          ),
+          h("div",{style:{display:"flex",gap:8}},
+            h("label",{style:{flex:1,display:"block",padding:"11px",borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer",background:acA(0.08),border:"1px solid "+acA(0.22),color:ac,fontFamily:"'Outfit',sans-serif",textAlign:"center"}},
+              "📂 "+(repertorio.length>0?"Actualizar":"Importar")+" Repertorio (.xlsx)",
+              h("input",{type:"file",accept:".xlsx,.xls",onChange:handleRepertorioXLSX,style:{display:"none"}})
+            ),
+            repertorio.length>0&&h("button",{onClick:function(){saveRepertorio([]);setRepertorio([]);ntf("Repertorio eliminado")},style:{padding:"11px 14px",borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:"#777",fontFamily:"'Outfit',sans-serif"}},"🗑️")
+          )
+        ),
+
         // Tipo 2 config + paquetes
         h("div",{className:"card-section"},
           h("h3",null,t2icono(cfg)+" Segundo Tipo de Evento"),
@@ -1267,11 +1336,25 @@ function App(props){
             ),
             // ── CANCIONES ─────────────────────────────────
             h("div",{style:{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 14px"}},
-              h("div",{style:{fontSize:10,color:ac,fontWeight:700,letterSpacing:"0.5px",marginBottom:10}},"🎵 CANCIONES (opcional)"),
+              h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
+                h("div",{style:{fontSize:10,color:ac,fontWeight:700,letterSpacing:"0.5px"}},"🎵 CANCIONES (opcional)"),
+                repertorio.length>0&&h("span",{style:{fontSize:9,color:"#555"}},repertorio.length+" canciones disponibles")
+              ),
               [0,1,2,3].map(function(i){
+                var cats=reperByCategory(repertorio);
+                var catList=Object.keys(cats);
                 return h("div",{key:i,style:{display:"flex",alignItems:"center",gap:8,marginBottom:i<3?8:0}},
                   h("div",{style:{width:20,height:20,borderRadius:"50%",background:acA(0.15),border:"1px solid "+acA(0.3),display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:ac,flexShrink:0}},i+1),
-                  h("input",{type:"text",style:Object.assign({},I,{fontSize:13}),placeholder:"Nombre de la canción...",value:(form.canciones&&form.canciones[i])||"",onChange:function(idx){return function(e){var c=(form.canciones||["","","",""]).slice();c[idx]=e.target.value;upd("canciones",c)}}(i)})
+                  repertorio.length>0
+                    ?h("select",{style:Object.assign({},I,{fontSize:13,cursor:"pointer"}),value:(form.canciones&&form.canciones[i])||"",onChange:function(idx){return function(e){var c=(form.canciones||["","","",""]).slice();c[idx]=e.target.value;upd("canciones",c)}}(i)},
+                        h("option",{value:""},"— Elegir canción —"),
+                        catList.map(function(cat){
+                          return h("optgroup",{key:cat,label:cat},
+                            cats[cat].map(function(song){return h("option",{key:song,value:song},song)})
+                          )
+                        })
+                      )
+                    :h("input",{type:"text",style:Object.assign({},I,{fontSize:13}),placeholder:"Nombre de la canción...",value:(form.canciones&&form.canciones[i])||"",onChange:function(idx){return function(e){var c=(form.canciones||["","","",""]).slice();c[idx]=e.target.value;upd("canciones",c)}}(i)})
                 )
               })
             )
@@ -1318,7 +1401,7 @@ function App(props){
         h("textarea",{style:Object.assign({},I,{minHeight:170,resize:"vertical",fontSize:12}),placeholder:"Pega aquí el mensaje de WhatsApp...",value:impTxt,onChange:function(e){setImpTxt(e.target.value)}}),
         impTxt.trim()&&h("div",{style:{background:"rgba(37,211,102,0.05)",border:"1px solid rgba(37,211,102,0.14)",borderRadius:10,padding:12,marginTop:10}},
           h("div",{style:{fontSize:11,color:"#25d366",fontWeight:700,marginBottom:6}},"✅ Vista previa detectada:"),
-          (function(){var p=parseWA(impTxt);return h("div",{style:{fontSize:12,color:"#aaa",lineHeight:1.7}},
+          (function(){var p=parseWA(impTxt,cfg);return h("div",{style:{fontSize:12,color:"#aaa",lineHeight:1.7}},
             p.contacto&&h("div",null,"👤 ",h("span",{style:{color:"#fff"}},p.contacto)),
             p.telefono&&h("div",null,"📱 ",p.telefono),
             p.tipo&&h("div",null,"📋 ",p.tipo),
